@@ -60,10 +60,7 @@ impl Detector {
     pub fn detect(&self, input: &str) -> Vec<Detection> {
         self.regex
             .find_iter(input)
-            .filter(|m| {
-                self.validate
-                    .map_or(true, |v| v(m.as_str()))
-            })
+            .filter(|m| self.validate.is_none_or(|v| v(m.as_str())))
             .map(|m| Detection {
                 kind: self.kind.clone(),
                 start: m.start(),
@@ -82,11 +79,14 @@ static EMAIL_RE: Lazy<Regex> =
 static CREDIT_CARD_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b").unwrap());
 
-static PHONE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\b(\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b").unwrap());
+static PHONE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\b(\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b").unwrap()
+});
 
-static IPV4_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b").unwrap());
+static IPV4_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b")
+        .unwrap()
+});
 
 static IPV6_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b").unwrap());
@@ -97,8 +97,7 @@ static API_KEY_STRIPE_RE: Lazy<Regex> =
 static API_KEY_GITHUB_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\b(ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36,}\b").unwrap());
 
-static API_KEY_AWS_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\bAKIA[0-9A-Z]{16}\b").unwrap());
+static API_KEY_AWS_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bAKIA[0-9A-Z]{16}\b").unwrap());
 
 /// Luhn algorithm for credit card validation.
 pub fn luhn_check(input: &str) -> bool {
@@ -119,14 +118,18 @@ pub fn luhn_check(input: &str) -> bool {
         .map(|(i, &d)| {
             if i % 2 == 1 {
                 let doubled = d * 2;
-                if doubled > 9 { doubled - 9 } else { doubled }
+                if doubled > 9 {
+                    doubled - 9
+                } else {
+                    doubled
+                }
             } else {
                 d
             }
         })
         .sum();
 
-    checksum % 10 == 0
+    checksum.is_multiple_of(10)
 }
 
 pub fn builtin_email() -> Detector {
@@ -134,8 +137,7 @@ pub fn builtin_email() -> Detector {
 }
 
 pub fn builtin_credit_card() -> Detector {
-    Detector::new(PiiKind::CreditCard, CREDIT_CARD_RE.clone())
-        .with_validation(luhn_check)
+    Detector::new(PiiKind::CreditCard, CREDIT_CARD_RE.clone()).with_validation(luhn_check)
 }
 
 pub fn builtin_phone() -> Detector {

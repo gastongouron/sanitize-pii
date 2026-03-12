@@ -1,8 +1,6 @@
 use regex::Regex;
 
-use crate::detector::{
-    self, Detection, Detector, PiiKind,
-};
+use crate::detector::{self, Detection, Detector, PiiKind};
 use crate::mask;
 
 /// The main entry point for sanitizing strings.
@@ -77,6 +75,12 @@ impl Sanitizer {
 /// Builder for configuring which PII detectors to use.
 pub struct SanitizerBuilder {
     detectors: Vec<Detector>,
+}
+
+impl Default for SanitizerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SanitizerBuilder {
