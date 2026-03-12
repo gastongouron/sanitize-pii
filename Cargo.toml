@@ -1,6 +1,6 @@
 [package]
 name = "sanitize-pii"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Detect and mask personally identifiable information (PII) in strings"
 license = "MIT"
