@@ -1,8 +1,6 @@
 use regex::Regex;
 
-use crate::detector::{
-    self, Detection, Detector, PiiKind,
-};
+use crate::detector::{self, Detection, Detector, PiiKind};
 use crate::mask;
 
 /// The main entry point for sanitizing strings.

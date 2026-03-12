@@ -23,7 +23,10 @@ fn mask_email(value: &str) -> String {
         format!("{}***", &local[..1])
     };
 
-    format!("{masked_local}@***.{}", domain.rsplit('.').next().unwrap_or("***"))
+    format!(
+        "{masked_local}@***.{}",
+        domain.rsplit('.').next().unwrap_or("***")
+    )
 }
 
 fn mask_credit_card(value: &str) -> String {
