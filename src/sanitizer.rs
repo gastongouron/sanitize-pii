@@ -140,6 +140,8 @@ impl SanitizerBuilder {
 mod tests {
     use super::*;
 
+    // --- Sanitize basics ---
+
     #[test]
     fn sanitize_email() {
         let s = Sanitizer::default();
@@ -162,6 +164,13 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_ipv6() {
+        let s = Sanitizer::default();
+        let result = s.sanitize("addr 2001:0db8:85a3:0000:0000:8a2e:0370:7334 end");
+        assert!(result.contains("***:***:***:***"));
+    }
+
+    #[test]
     fn sanitize_multiple_pii() {
         let s = Sanitizer::default();
         let result = s.sanitize("user alice@test.org from 10.0.0.1");
@@ -177,6 +186,55 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_empty_input() {
+        let s = Sanitizer::default();
+        assert_eq!(s.sanitize(""), "");
+    }
+
+    #[test]
+    fn sanitize_pii_at_start() {
+        let s = Sanitizer::builder().email().build();
+        let result = s.sanitize("bob@test.com is here");
+        assert!(result.starts_with("b***@***.com"));
+    }
+
+    #[test]
+    fn sanitize_pii_at_end() {
+        let s = Sanitizer::builder().email().build();
+        let result = s.sanitize("contact bob@test.com");
+        assert!(result.ends_with("b***@***.com"));
+    }
+
+    // --- API keys ---
+
+    #[test]
+    fn sanitize_stripe_key() {
+        let s = Sanitizer::default();
+        let result = s.sanitize("key: sk_live_abcdefghijklmnopqrst123");
+        assert!(result.contains("sk_l"));
+        assert!(result.contains("*"));
+        assert!(!result.contains("abcdefghijklmnopqrst123"));
+    }
+
+    #[test]
+    fn sanitize_github_token() {
+        let s = Sanitizer::default();
+        let result = s.sanitize("token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl");
+        assert!(result.contains("*"));
+        assert!(!result.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ"));
+    }
+
+    #[test]
+    fn sanitize_aws_key() {
+        let s = Sanitizer::default();
+        let result = s.sanitize("key: AKIAIOSFODNN7EXAMPLE");
+        assert!(result.contains("*"));
+        assert!(!result.contains("IOSFODNN7EXAMPLE"));
+    }
+
+    // --- Custom patterns ---
+
+    #[test]
     fn sanitize_custom_pattern() {
         let s = Sanitizer::builder()
             .custom("ssn", r"\b\d{3}-\d{2}-\d{4}\b")
@@ -185,6 +243,19 @@ mod tests {
         assert!(result.contains("123-"));
         assert!(result.contains("****"));
     }
+
+    #[test]
+    fn custom_invalid_regex_ignored() {
+        let s = Sanitizer::builder()
+            .custom("bad", r"[invalid")
+            .email()
+            .build();
+        // Should still work, invalid regex is silently skipped
+        let result = s.sanitize("hi bob@test.com");
+        assert!(result.contains("***"));
+    }
+
+    // --- Detect ---
 
     #[test]
     fn detect_returns_positions() {
@@ -197,11 +268,64 @@ mod tests {
     }
 
     #[test]
+    fn detect_empty_input() {
+        let s = Sanitizer::default();
+        let detections = s.detect("");
+        assert_eq!(detections.len(), 0);
+    }
+
+    #[test]
+    fn detect_no_match() {
+        let s = Sanitizer::default();
+        let detections = s.detect("clean string");
+        assert_eq!(detections.len(), 0);
+    }
+
+    // --- Builder ---
+
+    #[test]
     fn builder_pick_and_choose() {
         let s = Sanitizer::builder().email().build();
-        // Should detect email but not IP
         let result = s.sanitize("bob@test.com at 192.168.1.1");
         assert!(result.contains("***@***"));
         assert!(result.contains("192.168.1.1"));
+    }
+
+    #[test]
+    fn builder_empty() {
+        let s = Sanitizer::builder().build();
+        let input = "bob@test.com 4111111111111111";
+        assert_eq!(s.sanitize(input), input);
+    }
+
+    #[test]
+    fn builder_default_trait() {
+        let s: Sanitizer = SanitizerBuilder::default().email().build();
+        let result = s.sanitize("bob@test.com");
+        assert!(result.contains("***"));
+    }
+
+    #[test]
+    fn builder_all_methods() {
+        let s = Sanitizer::builder()
+            .email()
+            .credit_card()
+            .phone()
+            .ipv4()
+            .ipv6()
+            .api_keys()
+            .build();
+        let result = s.sanitize("bob@test.com");
+        assert!(result.contains("***"));
+    }
+
+    // --- Overlapping detections ---
+
+    #[test]
+    fn sanitize_adjacent_pii() {
+        let s = Sanitizer::builder().email().build();
+        let result = s.sanitize("a@b.com c@d.com");
+        assert!(!result.contains("a@b.com"));
+        assert!(!result.contains("c@d.com"));
     }
 }

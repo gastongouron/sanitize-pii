@@ -164,6 +164,24 @@ pub fn builtin_api_keys() -> Vec<Detector> {
 mod tests {
     use super::*;
 
+    // --- PiiKind Display ---
+
+    #[test]
+    fn display_all_pii_kinds() {
+        assert_eq!(PiiKind::Email.to_string(), "email");
+        assert_eq!(PiiKind::CreditCard.to_string(), "credit_card");
+        assert_eq!(PiiKind::Phone.to_string(), "phone");
+        assert_eq!(PiiKind::IpV4.to_string(), "ipv4");
+        assert_eq!(PiiKind::IpV6.to_string(), "ipv6");
+        assert_eq!(
+            PiiKind::ApiKey("stripe".into()).to_string(),
+            "api_key:stripe"
+        );
+        assert_eq!(PiiKind::Custom("ssn".into()).to_string(), "custom:ssn");
+    }
+
+    // --- Email ---
+
     #[test]
     fn detect_email() {
         let d = builtin_email();
@@ -173,9 +191,24 @@ mod tests {
     }
 
     #[test]
+    fn detect_multiple_emails() {
+        let d = builtin_email();
+        let results = d.detect("a@b.com and c@d.org");
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn detect_no_email() {
+        let d = builtin_email();
+        let results = d.detect("no emails here");
+        assert_eq!(results.len(), 0);
+    }
+
+    // --- Credit Card ---
+
+    #[test]
     fn detect_credit_card_valid() {
         let d = builtin_credit_card();
-        // Valid Visa test number
         let results = d.detect("card: 4111 1111 1111 1111");
         assert_eq!(results.len(), 1);
     }
@@ -188,12 +221,130 @@ mod tests {
     }
 
     #[test]
+    fn detect_credit_card_no_spaces() {
+        let d = builtin_credit_card();
+        let results = d.detect("card: 4111111111111111");
+        assert_eq!(results.len(), 1);
+    }
+
+    // --- Phone ---
+
+    #[test]
+    fn detect_phone_international() {
+        let d = builtin_phone();
+        let results = d.detect("call +33 612 345 678");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn detect_phone_local() {
+        let d = builtin_phone();
+        let results = d.detect("call 0612345678");
+        assert!(results.len() >= 1);
+    }
+
+    #[test]
+    fn detect_no_phone() {
+        let d = builtin_phone();
+        let results = d.detect("no phone here");
+        assert_eq!(results.len(), 0);
+    }
+
+    // --- IPv4 ---
+
+    #[test]
     fn detect_ipv4() {
         let d = builtin_ipv4();
         let results = d.detect("server at 192.168.1.1 responded");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].matched, "192.168.1.1");
     }
+
+    #[test]
+    fn detect_ipv4_boundary_values() {
+        let d = builtin_ipv4();
+        let results = d.detect("range 0.0.0.0 to 255.255.255.255");
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn reject_ipv4_invalid() {
+        let d = builtin_ipv4();
+        let results = d.detect("not an ip: 999.999.999.999");
+        assert_eq!(results.len(), 0);
+    }
+
+    // --- IPv6 ---
+
+    #[test]
+    fn detect_ipv6() {
+        let d = builtin_ipv6();
+        let results = d.detect("addr 2001:0db8:85a3:0000:0000:8a2e:0370:7334 here");
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].matched,
+            "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+        );
+    }
+
+    #[test]
+    fn detect_ipv6_uppercase() {
+        let d = builtin_ipv6();
+        let results = d.detect("addr 2001:0DB8:85A3:0000:0000:8A2E:0370:7334 end");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn detect_no_ipv6() {
+        let d = builtin_ipv6();
+        let results = d.detect("not an ipv6");
+        assert_eq!(results.len(), 0);
+    }
+
+    // --- API Keys ---
+
+    #[test]
+    fn detect_stripe_key() {
+        let detectors = builtin_api_keys();
+        let stripe = &detectors[0];
+        let results = stripe.detect("key: sk_live_abcdefghijklmnopqrst123");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn detect_stripe_test_key() {
+        let detectors = builtin_api_keys();
+        let stripe = &detectors[0];
+        let results = stripe.detect("key: rk_test_abcdefghijklmnopqrst123");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn detect_github_token() {
+        let detectors = builtin_api_keys();
+        let github = &detectors[1];
+        let results = github.detect("token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn detect_aws_key() {
+        let detectors = builtin_api_keys();
+        let aws = &detectors[2];
+        let results = aws.detect("key: AKIAIOSFODNN7EXAMPLE");
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn reject_invalid_api_keys() {
+        let detectors = builtin_api_keys();
+        for d in &detectors {
+            let results = d.detect("not a key");
+            assert_eq!(results.len(), 0);
+        }
+    }
+
+    // --- Luhn ---
 
     #[test]
     fn luhn_valid() {
@@ -204,5 +355,43 @@ mod tests {
     #[test]
     fn luhn_invalid() {
         assert!(!luhn_check("1234567890123456"));
+    }
+
+    #[test]
+    fn luhn_too_short() {
+        assert!(!luhn_check("123456789012")); // 12 digits
+    }
+
+    #[test]
+    fn luhn_too_long() {
+        assert!(!luhn_check("12345678901234567890")); // 20 digits
+    }
+
+    #[test]
+    fn luhn_13_digits() {
+        // 13 digits boundary — too short returns false
+        assert!(!luhn_check("4222222222225"));
+    }
+
+    // --- Detector with no validation ---
+
+    #[test]
+    fn detect_without_validation() {
+        let d = Detector::new(
+            PiiKind::Custom("test".into()),
+            Regex::new(r"\bfoo\b").unwrap(),
+        );
+        assert!(d.validate.is_none());
+        let results = d.detect("foo bar foo");
+        assert_eq!(results.len(), 2);
+    }
+
+    // --- Empty input ---
+
+    #[test]
+    fn detect_empty_input() {
+        let d = builtin_email();
+        let results = d.detect("");
+        assert_eq!(results.len(), 0);
     }
 }
