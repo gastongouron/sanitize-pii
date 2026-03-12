@@ -62,7 +62,7 @@ impl Detector {
             .find_iter(input)
             .filter(|m| {
                 self.validate
-                    .map_or(true, |v| v(m.as_str()))
+                    .is_none_or(|v| v(m.as_str()))
             })
             .map(|m| Detection {
                 kind: self.kind.clone(),
@@ -126,7 +126,7 @@ pub fn luhn_check(input: &str) -> bool {
         })
         .sum();
 
-    checksum % 10 == 0
+    checksum.is_multiple_of(10)
 }
 
 pub fn builtin_email() -> Detector {

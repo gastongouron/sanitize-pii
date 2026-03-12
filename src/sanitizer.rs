@@ -79,6 +79,12 @@ pub struct SanitizerBuilder {
     detectors: Vec<Detector>,
 }
 
+impl Default for SanitizerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SanitizerBuilder {
     pub fn new() -> Self {
         Self {
