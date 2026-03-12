@@ -1,0 +1,13 @@
+[package]
+name = "sanitize-pii"
+version = "0.1.0"
+edition = "2021"
+description = "Detect and mask personally identifiable information (PII) in strings"
+license = "MIT"
+repository = "https://github.com/gastongouron/sanitize-pii"
+keywords = ["pii", "sanitize", "redact", "privacy", "gdpr"]
+categories = ["text-processing"]
+
+[dependencies]
+regex = "1"
+once_cell = "1"
