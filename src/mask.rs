@@ -84,6 +84,56 @@ fn mask_generic(value: &str) -> String {
 mod tests {
     use super::*;
 
+    // --- mask() dispatch ---
+
+    #[test]
+    fn mask_dispatches_email() {
+        assert_eq!(mask("alice@example.com", &PiiKind::Email), "a***@***.com");
+    }
+
+    #[test]
+    fn mask_dispatches_credit_card() {
+        assert_eq!(
+            mask("4111111111111111", &PiiKind::CreditCard),
+            "4111-****-****-1111"
+        );
+    }
+
+    #[test]
+    fn mask_dispatches_phone() {
+        let result = mask("0612345678", &PiiKind::Phone);
+        assert!(result.contains('*'));
+        assert!(result.ends_with("78"));
+    }
+
+    #[test]
+    fn mask_dispatches_ipv4() {
+        assert_eq!(mask("10.0.0.1", &PiiKind::IpV4), "10.***.***.1");
+    }
+
+    #[test]
+    fn mask_dispatches_ipv6() {
+        assert_eq!(
+            mask("2001:0db8:85a3:0000:0000:8a2e:0370:7334", &PiiKind::IpV6),
+            "***:***:***:***"
+        );
+    }
+
+    #[test]
+    fn mask_dispatches_api_key() {
+        let result = mask("sk_live_abc123def456", &PiiKind::ApiKey("stripe".into()));
+        assert!(result.starts_with("sk_l"));
+        assert!(result.contains('*'));
+    }
+
+    #[test]
+    fn mask_dispatches_custom() {
+        let result = mask("123-45-6789", &PiiKind::Custom("ssn".into()));
+        assert!(result.contains('*'));
+    }
+
+    // --- Email ---
+
     #[test]
     fn mask_email_standard() {
         assert_eq!(mask_email("alice@example.com"), "a***@***.com");
@@ -93,6 +143,15 @@ mod tests {
     fn mask_email_short_local() {
         assert_eq!(mask_email("a@b.co"), "*@***.co");
     }
+
+    #[test]
+    fn mask_email_no_at() {
+        // Falls back to mask_generic
+        let result = mask_email("notanemail");
+        assert!(result.contains('*'));
+    }
+
+    // --- Credit Card ---
 
     #[test]
     fn mask_credit_card_spaced() {
@@ -111,9 +170,49 @@ mod tests {
     }
 
     #[test]
+    fn mask_credit_card_few_digits() {
+        // Fewer than 8 digits falls back to generic
+        let result = mask_credit_card("1234");
+        assert_eq!(result, "****");
+    }
+
+    // --- Phone ---
+
+    #[test]
+    fn mask_phone_standard() {
+        let result = mask_phone("+33612345678");
+        assert!(result.ends_with("78"));
+        assert!(result.contains('*'));
+    }
+
+    #[test]
+    fn mask_phone_short() {
+        assert_eq!(mask_phone("1234"), "****");
+    }
+
+    #[test]
+    fn mask_phone_with_separators() {
+        let result = mask_phone("06-12-34-56-78");
+        // Separators preserved, digits masked except last 2 chars
+        assert!(result.contains('-'));
+        assert!(result.ends_with("78"));
+    }
+
+    // --- IPv4 ---
+
+    #[test]
     fn mask_ipv4_standard() {
         assert_eq!(mask_ipv4("192.168.1.42"), "192.***.***.42");
     }
+
+    #[test]
+    fn mask_ipv4_not_four_parts() {
+        // Falls back to generic
+        let result = mask_ipv4("192.168.1");
+        assert!(result.contains('*'));
+    }
+
+    // --- Generic ---
 
     #[test]
     fn mask_generic_short() {
@@ -121,7 +220,26 @@ mod tests {
     }
 
     #[test]
+    fn mask_generic_exactly_four() {
+        assert_eq!(mask_generic("abcd"), "****");
+    }
+
+    #[test]
+    fn mask_generic_five() {
+        assert_eq!(mask_generic("abcde"), "abcd*");
+    }
+
+    #[test]
     fn mask_generic_long() {
         assert_eq!(mask_generic("sk_live_abc123def456"), "sk_l****************");
+    }
+
+    #[test]
+    fn mask_generic_very_long() {
+        // Stars capped at 20
+        let input = "a".repeat(30);
+        let result = mask_generic(&input);
+        assert!(result.starts_with("aaaa"));
+        assert_eq!(result.len(), 24); // 4 prefix + 20 stars
     }
 }

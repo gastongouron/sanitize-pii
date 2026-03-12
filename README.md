@@ -83,10 +83,10 @@ assert!(clean.contains("****"));
 
 ## Use cases
 
-- **Logging** — wrap your logger to strip PII before writing
-- **Error reporting** — sanitize before sending to Sentry, Datadog, etc.
-- **Data exports** — clean dumps before sharing or archiving
-- **GDPR compliance** — ensure PII doesn't leak into unprotected storage
+- **Logging:** wrap your logger to strip PII before writing
+- **Error reporting:** sanitize before sending to Sentry, Datadog, etc.
+- **Data exports:** clean dumps before sharing or archiving
+- **GDPR compliance:** ensure PII doesn't leak into unprotected storage
 
 ## License
 
